@@ -49,7 +49,8 @@ bot.onText(/\/start/, (msg) => {
         { text: `Lớp 11`, callback_data: `class_Lớp 11` }
     ]);
 
-    bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:", {
+    bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:\n\n💬 _Cần hỗ trợ/Báo lỗi: Liên hệ @UsernameCuaBan_", {
+        parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
     });
 });
@@ -201,7 +202,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
                     bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
                     
                     if (foundCount >= quantity) {
-                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Vô đây để kích hoạt mã** (đăng nhập trước khi nhấn vô link): https://hocmai.vn/course/mycourse2.php?t=activationkey\n\n⚠️ _Nếu điền tiếp mà hệ thống báo là "Bạn đã nhập quá số lần cho phép" thì hãy đợi 15p-1 tiếng._`, { 
+                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Vô đây để kích hoạt mã** (đăng nhập trước khi nhấn vô link): https://hocmai.vn/course/mycourse2.php?t=activationkey\n\n⚠️ _Nếu điền tiếp mà hệ thống báo là "Bạn đã nhập quá số lần cho phép" thì hãy đợi 15p-1 tiếng._\n\n💬 _Gặp trục trặc? Liên hệ Admin: @ngkhoa1916_`, { 
                             chat_id: chatId,
                             message_id: originalMessageId,
                             disable_web_page_preview: true,
@@ -221,7 +222,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
     }
 
     if (foundCount < quantity && activeHunts[chatId]) {
-        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!`, { 
+        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!\n\n💬 _Cần hỗ trợ: @UsernameCuaBan_`, { 
             chat_id: chatId,
             message_id: originalMessageId,
             parse_mode: "Markdown" 
