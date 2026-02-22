@@ -8,6 +8,9 @@ const bot = new TelegramBot(token, { polling: true });
 
 const apiBaseUrl = "https://script.google.com/macros/s/AKfycbzgfK1VP8ivsAbNRLdne48XD-7QcwsxdHP47JaLpNdKxN7jVaEuDqZMSkCDSYiT6iwc/exec";
 
+// Lưu trạng thái chạy của mỗi user
+const activeHunts = {};
+
 // 🟢 TẠO SERVER GIẢ ĐỂ RENDER KHÔNG BÁO LỖI
 const app = express();
 const port = process.env.PORT || 3000;
@@ -32,14 +35,19 @@ bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const keyboard = [];
     
-    // Tạo menu lưới 3 cột cho 12 lớp
-    for (let i = 1; i <= 12; i += 3) {
+    // Tạo menu lưới 3 cột từ lớp 1 đến lớp 9
+    for (let i = 1; i <= 9; i += 3) {
         keyboard.push([
             { text: `Lớp ${i}`, callback_data: `class_Lớp ${i}` },
             { text: `Lớp ${i+1}`, callback_data: `class_Lớp ${i+1}` },
             { text: `Lớp ${i+2}`, callback_data: `class_Lớp ${i+2}` }
         ]);
     }
+    // Thêm hàng cuối cùng cho Lớp 10 và 11
+    keyboard.push([
+        { text: `Lớp 10`, callback_data: `class_Lớp 10` },
+        { text: `Lớp 11`, callback_data: `class_Lớp 11` }
+    ]);
 
     bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:", {
         reply_markup: { inline_keyboard: keyboard }
@@ -92,9 +100,27 @@ bot.on('callback_query', async (query) => {
         const className = parts[2];
         const quantity = parseInt(parts[3], 10);
         
-        bot.sendMessage(chatId, `⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { parse_mode: "Markdown" });
+        // Đánh dấu user đang chạy
+        activeHunts[chatId] = true;
+
+        bot.sendMessage(chatId, `⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { 
+            parse_mode: "Markdown",
+            reply_markup: {
+                inline_keyboard: [[{ text: "❌ Hủy quá trình", callback_data: "cancel_hunt" }]]
+            }
+        });
         
         await huntGiftLoop(chatId, className, targetGift, quantity);
+    }
+
+    // Bước 3: Xử lý nút Hủy
+    if (data === 'cancel_hunt') {
+        if (activeHunts[chatId]) {
+            activeHunts[chatId] = false;
+            bot.sendMessage(chatId, "🛑 Đang tiến hành hủy lệnh... Vui lòng đợi trong giây lát.");
+        } else {
+            bot.sendMessage(chatId, "⚠️ Không có tiến trình nào đang chạy.");
+        }
     }
 });
 
@@ -106,6 +132,12 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
     const maxAttempts = quantity * 30; 
 
     while (attempts < maxAttempts && foundCount < quantity) {
+        // Kiểm tra xem user có bấm hủy không
+        if (!activeHunts[chatId]) {
+            bot.sendMessage(chatId, `🛑 Quá trình săn quà đã dừng. Thu thập được **${foundCount}/${quantity}** mã.`, { parse_mode: "Markdown" });
+            return;
+        }
+
         attempts++;
         const playPhone = randomPhone();
         const birthYear = getYearOfBirth(className);
@@ -155,6 +187,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
                     
                     if (foundCount >= quantity) {
                         bot.sendMessage(chatId, `✅ Đã thu thập đủ **${quantity} mã**. Tạm dừng bot!`, { parse_mode: "Markdown" });
+                        delete activeHunts[chatId]; // Xóa trạng thái
                         return; // Thoát vòng lặp khi đủ số lượng
                     }
                 }
@@ -167,9 +200,11 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
         await new Promise(res => setTimeout(res, 1000));
     }
 
-    if (foundCount < quantity) {
+    if (foundCount < quantity && activeHunts[chatId]) {
         bot.sendMessage(chatId, `❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng nhấn chọn lại để tiếp tục!`, { parse_mode: "Markdown" });
     }
+    
+    delete activeHunts[chatId]; // Dọn dẹp trạng thái
 }
 
 console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
