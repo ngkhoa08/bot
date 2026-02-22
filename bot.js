@@ -201,9 +201,10 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
                     bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
                     
                     if (foundCount >= quantity) {
-                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**. Tạm dừng bot!`, { 
+                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Vô đây để kích hoạt mã** (đăng nhập trước khi nhấn vô link): https://hocmai.vn/course/mycourse2.php?t=activationkey`, { 
                             chat_id: chatId,
                             message_id: originalMessageId,
+                            disable_web_page_preview: true,
                             parse_mode: "Markdown" 
                         });
                         delete activeHunts[chatId]; // Xóa trạng thái
