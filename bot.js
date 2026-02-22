@@ -10,9 +10,11 @@ const apiBaseUrl = "https://script.google.com/macros/s/AKfycbzgfK1VP8ivsAbNRLdne
 
 // 🔴 ID ADMIN ĐỂ NHẬN THÔNG BÁO VÀ QUYỀN DỪNG LỆNH
 const ADMIN_ID = '7932302530'; 
+const BOT_PASSWORD = '2909';
 
-// Lưu trạng thái chạy của mỗi user
+// Lưu trạng thái chạy và xác thực
 const activeHunts = {};
+const authenticatedUsers = {};
 
 // 🟢 TẠO SERVER GIẢ ĐỂ RENDER KHÔNG BÁO LỖI
 const app = express();
@@ -33,27 +35,42 @@ function getYearOfBirth(className) {
     return (2020 - classNumber).toString();
 }
 
-// Lệnh dành cho Admin để dừng tiến trình của một User bất kỳ
-bot.onText(/\/stop (.+)/, (msg, match) => {
+// Xử lý tin nhắn văn bản (Mật khẩu & Lệnh Admin)
+bot.on('message', (msg) => {
     const chatId = msg.chat.id.toString();
-    const targetId = match[1].trim();
+    const text = msg.text;
 
-    if (chatId !== ADMIN_ID) return; // Chỉ admin mới được dùng
+    // Lệnh Admin /stop
+    if (text && text.startsWith('/stop') && chatId === ADMIN_ID) {
+        const targetId = text.replace('/stop', '').trim();
+        if (activeHunts[targetId]) {
+            activeHunts[targetId] = false;
+            bot.sendMessage(ADMIN_ID, `✅ Đã dừng tiến trình của ID: \`${targetId}\`.`, { parse_mode: "Markdown" });
+            bot.sendMessage(targetId, `🛑 Admin đã can thiệp và dừng quá trình của bạn.`, { parse_mode: "Markdown" });
+        }
+        return;
+    }
 
-    if (activeHunts[targetId]) {
-        activeHunts[targetId] = false;
-        bot.sendMessage(ADMIN_ID, `✅ Đã phát lệnh dừng tiến trình của ID: \`${targetId}\`.`, { parse_mode: "Markdown" });
-        bot.sendMessage(targetId, `🛑 Quá trình săn quà của bạn đã bị Admin tạm dừng.`, { parse_mode: "Markdown" });
-    } else {
-        bot.sendMessage(ADMIN_ID, `⚠️ ID \`${targetId}\` hiện không có tiến trình nào đang chạy.`, { parse_mode: "Markdown" });
+    // Kiểm tra mật khẩu
+    if (!authenticatedUsers[chatId] && text !== '/start') {
+        if (text === BOT_PASSWORD) {
+            authenticatedUsers[chatId] = true;
+            bot.sendMessage(chatId, "✅ Mật khẩu chính xác! Gõ /start để bắt đầu.");
+        } else {
+            bot.sendMessage(chatId, "🔑 Vui lòng nhập mật khẩu để sử dụng bot:");
+        }
     }
 });
 
-// Lệnh /start để hiển thị Menu chọn Lớp
+// Lệnh /start
 bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
+    const chatId = msg.chat.id.toString();
+
+    if (!authenticatedUsers[chatId]) {
+        return bot.sendMessage(chatId, "🔑 Vui lòng nhập mật khẩu để sử dụng bot:");
+    }
+
     const keyboard = [];
-    
     for (let i = 1; i <= 9; i += 3) {
         keyboard.push([
             { text: `Lớp ${i}`, callback_data: `class_Lớp ${i}` },
@@ -61,36 +78,31 @@ bot.onText(/\/start/, (msg) => {
             { text: `Lớp ${i+2}`, callback_data: `class_Lớp ${i+2}` }
         ]);
     }
-    keyboard.push([
-        { text: `Lớp 10`, callback_data: `class_Lớp 10` },
-        { text: `Lớp 11`, callback_data: `class_Lớp 11` }
-    ]);
+    keyboard.push([{ text: `Lớp 10`, callback_data: `class_Lớp 10` }, { text: `Lớp 11`, callback_data: `class_Lớp 11` }]);
 
-    bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:\n\n💬 _Cần hỗ trợ/Báo lỗi: Liên hệ @ngkhoa1916_", {
+    bot.sendMessage(chatId, "👋 Chọn Lớp để bắt đầu:\n\n💬 _Hỗ trợ: @ngkhoa1916_", {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
     });
 });
 
-// Xử lý khi người dùng bấm nút trên Telegram
+// Xử lý các nút bấm
 bot.on('callback_query', async (query) => {
-    const chatId = query.message.chat.id;
+    const chatId = query.message.chat.id.toString();
     const messageId = query.message.message_id;
     const data = query.data;
+
+    if (!authenticatedUsers[chatId]) return;
 
     if (data.startsWith('class_')) {
         const selectedClass = data.split('_')[1];
         const giftKeyboard = [
             [{ text: "🎓 Khóa Học", callback_data: `qty_khoahoc_${selectedClass}` }],
             [{ text: "📝 Phòng Luyện", callback_data: `qty_phongluyen_${selectedClass}` }],
-            [{ text: "🎁 Bất kỳ (Ra gì lấy đó)", callback_data: `qty_any_${selectedClass}` }]
+            [{ text: "🎁 Bất kỳ", callback_data: `qty_any_${selectedClass}` }]
         ];
-
-        bot.editMessageText(`Bạn đã chọn **${selectedClass}**. Bạn muốn săn quà gì?`, {
-            chat_id: chatId,
-            message_id: messageId,
-            parse_mode: "Markdown",
-            reply_markup: { inline_keyboard: giftKeyboard }
+        bot.editMessageText(`Bạn đã chọn **${selectedClass}**. Săn gì đây?`, {
+            chat_id: chatId, message_id: messageId, parse_mode: "Markdown", reply_markup: { inline_keyboard: giftKeyboard }
         });
     }
 
@@ -98,19 +110,12 @@ bot.on('callback_query', async (query) => {
         const parts = data.split('_');
         const targetGift = parts[1];
         const className = parts[2];
-        
         const qtyKeyboard = [
-            [{ text: "1 Mã", callback_data: `hunt_${targetGift}_${className}_1` },
-             { text: "3 Mã", callback_data: `hunt_${targetGift}_${className}_3` }],
-            [{ text: "5 Mã", callback_data: `hunt_${targetGift}_${className}_5` },
-             { text: "10 Mã", callback_data: `hunt_${targetGift}_${className}_10` }]
+            [{ text: "1 Mã", callback_data: `hunt_${targetGift}_${className}_1` }, { text: "3 Mã", callback_data: `hunt_${targetGift}_${className}_3` }],
+            [{ text: "5 Mã", callback_data: `hunt_${targetGift}_${className}_5` }, { text: "Vô hạn ♾️", callback_data: `hunt_${targetGift}_${className}_0` }]
         ];
-
-        bot.editMessageText(`Bạn muốn lấy bao nhiêu mã?`, {
-            chat_id: chatId,
-            message_id: messageId,
-            parse_mode: "Markdown",
-            reply_markup: { inline_keyboard: qtyKeyboard }
+        bot.editMessageText(`Chọn số lượng muốn săn:`, {
+            chat_id: chatId, message_id: messageId, parse_mode: "Markdown", reply_markup: { inline_keyboard: qtyKeyboard }
         });
     }
 
@@ -120,46 +125,37 @@ bot.on('callback_query', async (query) => {
         const className = parts[2];
         const quantity = parseInt(parts[3], 10);
         
-        const user = query.from;
-        const userInfo = user.username ? `@${user.username}` : user.first_name;
-        bot.sendMessage(ADMIN_ID, `👀 **Theo dõi:** ${userInfo} (ID: \`${user.id}\`) đang săn **${quantity} mã ${targetGift}** cho **${className}**.`, { parse_mode: "Markdown" });
+        const userInfo = query.from.username ? `@${query.from.username}` : query.from.first_name;
+        const qtyText = quantity === 0 ? "Vô hạn" : quantity + " mã";
+        
+        bot.sendMessage(ADMIN_ID, `👀 **Theo dõi:** ${userInfo} (ID: \`${chatId}\`) đang săn **${qtyText} ${targetGift}** - **${className}**.`, { parse_mode: "Markdown" });
 
         activeHunts[chatId] = true;
-
-        bot.editMessageText(`⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { 
-            chat_id: chatId,
-            message_id: messageId,
-            parse_mode: "Markdown",
-            reply_markup: {
-                inline_keyboard: [[{ text: "❌ Hủy quá trình", callback_data: "cancel_hunt" }]]
-            }
+        bot.editMessageText(`⏳ Đang săn **${qtyText} ${targetGift}** cho **${className}**...`, { 
+            chat_id: chatId, message_id: messageId, parse_mode: "Markdown",
+            reply_markup: { inline_keyboard: [[{ text: "❌ Hủy quá trình", callback_data: "cancel_hunt" }]] }
         });
         
         await huntGiftLoop(chatId, className, targetGift, quantity, messageId);
     }
 
-    if (data === 'cancel_hunt') {
-        if (activeHunts[chatId]) {
-            activeHunts[chatId] = false;
-            bot.editMessageText("🛑 Đang tiến hành hủy lệnh... Vui lòng đợi trong giây lát.", {
-                chat_id: chatId,
-                message_id: messageId
-            });
-        }
+    if (data === 'cancel_hunt' && activeHunts[chatId]) {
+        activeHunts[chatId] = false;
+        bot.editMessageText("🛑 Đang hủy...", { chat_id: chatId, message_id: messageId });
     }
 });
 
 async function huntGiftLoop(chatId, className, targetGift, quantity, originalMessageId) {
     let attempts = 0;
     let foundCount = 0;
-    const maxAttempts = quantity * 30; 
+    // Nếu quantity = 0 (Vô hạn), maxAttempts sẽ rất lớn
+    const isInfinite = quantity === 0;
+    const maxAttempts = isInfinite ? 999999 : quantity * 50; 
 
-    while (attempts < maxAttempts && foundCount < quantity) {
+    while (attempts < maxAttempts && (isInfinite || foundCount < quantity)) {
         if (!activeHunts[chatId]) {
-            bot.editMessageText(`🛑 Quá trình săn quà đã dừng. Thu thập được **${foundCount}/${quantity}** mã.`, { 
-                chat_id: chatId,
-                message_id: originalMessageId,
-                parse_mode: "Markdown" 
+            bot.editMessageText(`🛑 Đã dừng. Thu thập được **${foundCount}** mã.`, { 
+                chat_id: chatId, message_id: originalMessageId, parse_mode: "Markdown" 
             });
             return;
         }
@@ -168,67 +164,45 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
         const playPhone = randomPhone();
         const birthYear = getYearOfBirth(className);
 
-        const params = {
-            action: "get_gift",
-            name: "Auto Bot",
-            age: birthYear,
-            phone: playPhone,
-            email: `bot${Math.floor(Math.random()*10000)}@gmail.com`,
-            class: className
-        };
-
         try {
-            const response = await axios.get(apiBaseUrl, { params });
+            const response = await axios.get(apiBaseUrl, { 
+                params: { action: "get_gift", name: "Auto Bot", age: birthYear, phone: playPhone, email: `bot${Date.now()}@gmail.com`, class: className }
+            });
             const data = response.data;
 
             if (data.gift && data.gift.Gift_Title) {
                 const titleLower = data.gift.Gift_Title.toLowerCase();
                 const nameLower = (data.gift.Gift_Name || "").toLowerCase();
-                let isMatch = false;
-
                 const isVoucher = titleLower.includes('voucher') || nameLower.includes('voucher');
 
+                let isMatch = false;
                 if (targetGift === 'any') isMatch = true;
                 else if (targetGift === 'khoahoc' && !isVoucher && titleLower.includes('khóa')) isMatch = true;
                 else if (targetGift === 'phongluyen' && !isVoucher && titleLower.includes('phòng luyện')) isMatch = true;
 
                 if (isMatch) {
                     foundCount++;
-                    const successMsg = `🎉 **THÀNH CÔNG (${foundCount}/${quantity})**\n\n` +
-                                       `📱 SĐT: \`${playPhone}\`\n` +
-                                       `🎁 Quà: **${data.gift.Gift_Title}**\n` +
-                                       `🔑 Mã: \`${data.gift.Gift_Code || 'Không có mã'}\``;
+                    bot.sendMessage(chatId, `🎉 **TRÚNG QUÀ (${foundCount})**\n📱 SĐT: \`${playPhone}\`\n🎁: **${data.gift.Gift_Title}**\n🔑: \`${data.gift.Gift_Code || 'N/A'}\``, { parse_mode: "Markdown" });
                     
-                    bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
-                    
-                    if (foundCount >= quantity) {
-                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Kích hoạt tại**: https://hocmai.vn/course/mycourse2.php?t=activationkey\n\n⚠️ _Nếu quá số lần cho phép, hãy đợi 15p-1 tiếng._\n\n💬 _Hỗ trợ: @ngkhoa1916_`, { 
-                            chat_id: chatId,
-                            message_id: originalMessageId,
-                            disable_web_page_preview: true,
-                            parse_mode: "Markdown" 
+                    if (!isInfinite && foundCount >= quantity) {
+                        bot.editMessageText(`✅ Xong! Thu thập đủ **${quantity} mã**.\n👉 Kích hoạt: https://hocmai.vn/course/mycourse2.php?t=activationkey\n⚠️ Đợi 15p-1h nếu bị báo quá lượt.\n💬 Admin: @ngkhoa1916`, { 
+                            chat_id: chatId, message_id: originalMessageId, disable_web_page_preview: true, parse_mode: "Markdown" 
                         });
                         delete activeHunts[chatId];
                         return;
                     }
                 }
             }
-        } catch (error) {
-            console.log(`Lỗi mạng lần ${attempts}`);
-        }
-
-        await new Promise(res => setTimeout(res, 1000));
+        } catch (e) { console.log("Lỗi mạng..."); }
+        await new Promise(r => setTimeout(r, 1000));
     }
 
-    if (foundCount < quantity && activeHunts[chatId]) {
-        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã.\n\n💬 _Cần hỗ trợ: @ngkhoa1916_`, { 
-            chat_id: chatId,
-            message_id: originalMessageId,
-            parse_mode: "Markdown" 
+    if (activeHunts[chatId]) {
+        bot.editMessageText(`❌ Hết lượt thử! Lấy được **${foundCount}** mã.\n💬 Hỗ trợ: @ngkhoa1916`, { 
+            chat_id: chatId, message_id: originalMessageId, parse_mode: "Markdown" 
         });
     }
-    
     delete activeHunts[chatId];
 }
 
-console.log("🤖 Bot đang chạy!");
+console.log("🤖 Bot khởi động thành công!");
