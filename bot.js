@@ -57,6 +57,7 @@ bot.onText(/\/start/, (msg) => {
 // Xử lý khi người dùng bấm nút trên Telegram
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
     const data = query.data;
 
     // Bước 1: Chọn Lớp xong -> Hiển thị Menu chọn Quà
@@ -68,7 +69,9 @@ bot.on('callback_query', async (query) => {
             [{ text: "🎁 Bất kỳ (Ra gì lấy đó)", callback_data: `qty_any_${selectedClass}` }]
         ];
 
-        bot.sendMessage(chatId, `Bạn đã chọn **${selectedClass}**. Bạn muốn săn quà gì?`, {
+        bot.editMessageText(`Bạn đã chọn **${selectedClass}**. Bạn muốn săn quà gì?`, {
+            chat_id: chatId,
+            message_id: messageId,
             parse_mode: "Markdown",
             reply_markup: { inline_keyboard: giftKeyboard }
         });
@@ -87,7 +90,9 @@ bot.on('callback_query', async (query) => {
              { text: "10 Mã", callback_data: `hunt_${targetGift}_${className}_10` }]
         ];
 
-        bot.sendMessage(chatId, `Bạn muốn lấy bao nhiêu mã?`, {
+        bot.editMessageText(`Bạn muốn lấy bao nhiêu mã?`, {
+            chat_id: chatId,
+            message_id: messageId,
             parse_mode: "Markdown",
             reply_markup: { inline_keyboard: qtyKeyboard }
         });
@@ -103,29 +108,34 @@ bot.on('callback_query', async (query) => {
         // Đánh dấu user đang chạy
         activeHunts[chatId] = true;
 
-        bot.sendMessage(chatId, `⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { 
+        bot.editMessageText(`⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { 
+            chat_id: chatId,
+            message_id: messageId,
             parse_mode: "Markdown",
             reply_markup: {
                 inline_keyboard: [[{ text: "❌ Hủy quá trình", callback_data: "cancel_hunt" }]]
             }
         });
         
-        await huntGiftLoop(chatId, className, targetGift, quantity);
+        await huntGiftLoop(chatId, className, targetGift, quantity, messageId);
     }
 
     // Bước 3: Xử lý nút Hủy
     if (data === 'cancel_hunt') {
         if (activeHunts[chatId]) {
             activeHunts[chatId] = false;
-            bot.sendMessage(chatId, "🛑 Đang tiến hành hủy lệnh... Vui lòng đợi trong giây lát.");
+            bot.editMessageText("🛑 Đang tiến hành hủy lệnh... Vui lòng đợi trong giây lát.", {
+                chat_id: chatId,
+                message_id: messageId
+            });
         } else {
-            bot.sendMessage(chatId, "⚠️ Không có tiến trình nào đang chạy.");
+            bot.answerCallbackQuery(query.id, { text: "⚠️ Không có tiến trình nào đang chạy.", show_alert: true });
         }
     }
 });
 
 // Hàm Spam API tới khi ra đúng quà yêu cầu
-async function huntGiftLoop(chatId, className, targetGift, quantity) {
+async function huntGiftLoop(chatId, className, targetGift, quantity, originalMessageId) {
     let attempts = 0;
     let foundCount = 0;
     // Chạy tối đa 30 lần cho 1 mã để tránh bị ban IP (Ví dụ: săn 5 mã sẽ thử tối đa 150 lần)
@@ -134,7 +144,11 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
     while (attempts < maxAttempts && foundCount < quantity) {
         // Kiểm tra xem user có bấm hủy không
         if (!activeHunts[chatId]) {
-            bot.sendMessage(chatId, `🛑 Quá trình săn quà đã dừng. Thu thập được **${foundCount}/${quantity}** mã.`, { parse_mode: "Markdown" });
+            bot.editMessageText(`🛑 Quá trình săn quà đã dừng. Thu thập được **${foundCount}/${quantity}** mã.`, { 
+                chat_id: chatId,
+                message_id: originalMessageId,
+                parse_mode: "Markdown" 
+            });
             return;
         }
 
@@ -177,6 +191,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
 
                 if (isMatch) {
                     foundCount++;
+                    // Gửi mã quà tặng thành một tin nhắn mới riêng biệt để bạn dễ copy
                     const successMsg = `🎉 **THÀNH CÔNG (${foundCount}/${quantity})**\n\n` +
                                        `📱 SĐT đã dùng: \`${playPhone}\`\n` +
                                        `🎓 Lớp: ${className}\n` +
@@ -186,7 +201,11 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
                     bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
                     
                     if (foundCount >= quantity) {
-                        bot.sendMessage(chatId, `✅ Đã thu thập đủ **${quantity} mã**. Tạm dừng bot!`, { parse_mode: "Markdown" });
+                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**. Tạm dừng bot!`, { 
+                            chat_id: chatId,
+                            message_id: originalMessageId,
+                            parse_mode: "Markdown" 
+                        });
                         delete activeHunts[chatId]; // Xóa trạng thái
                         return; // Thoát vòng lặp khi đủ số lượng
                     }
@@ -201,7 +220,11 @@ async function huntGiftLoop(chatId, className, targetGift, quantity) {
     }
 
     if (foundCount < quantity && activeHunts[chatId]) {
-        bot.sendMessage(chatId, `❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng nhấn chọn lại để tiếp tục!`, { parse_mode: "Markdown" });
+        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!`, { 
+            chat_id: chatId,
+            message_id: originalMessageId,
+            parse_mode: "Markdown" 
+        });
     }
     
     delete activeHunts[chatId]; // Dọn dẹp trạng thái
