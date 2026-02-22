@@ -55,9 +55,9 @@ bot.on('callback_query', async (query) => {
     if (data.startsWith('class_')) {
         const selectedClass = data.split('_')[1];
         const giftKeyboard = [
-            [{ text: "🎓 Khóa Học", callback_data: `hunt_khoahoc_${selectedClass}` }],
-            [{ text: "📝 Phòng Luyện", callback_data: `hunt_phongluyen_${selectedClass}` }],
-            [{ text: "🎁 Bất kỳ (Ra gì lấy đó)", callback_data: `hunt_any_${selectedClass}` }]
+            [{ text: "🎓 Khóa Học", callback_data: `qty_khoahoc_${selectedClass}` }],
+            [{ text: "📝 Phòng Luyện", callback_data: `qty_phongluyen_${selectedClass}` }],
+            [{ text: "🎁 Bất kỳ (Ra gì lấy đó)", callback_data: `qty_any_${selectedClass}` }]
         ];
 
         bot.sendMessage(chatId, `Bạn đã chọn **${selectedClass}**. Bạn muốn săn quà gì?`, {
@@ -66,24 +66,46 @@ bot.on('callback_query', async (query) => {
         });
     }
 
+    // Bước 1.5: Chọn Số lượng
+    if (data.startsWith('qty_')) {
+        const parts = data.split('_');
+        const targetGift = parts[1];
+        const className = parts[2];
+        
+        const qtyKeyboard = [
+            [{ text: "1 Mã", callback_data: `hunt_${targetGift}_${className}_1` },
+             { text: "3 Mã", callback_data: `hunt_${targetGift}_${className}_3` }],
+            [{ text: "5 Mã", callback_data: `hunt_${targetGift}_${className}_5` },
+             { text: "10 Mã", callback_data: `hunt_${targetGift}_${className}_10` }]
+        ];
+
+        bot.sendMessage(chatId, `Bạn muốn lấy bao nhiêu mã?`, {
+            parse_mode: "Markdown",
+            reply_markup: { inline_keyboard: qtyKeyboard }
+        });
+    }
+
     // Bước 2: Bắt đầu săn quà
     if (data.startsWith('hunt_')) {
         const parts = data.split('_');
         const targetGift = parts[1]; // khoahoc, phongluyen, any
         const className = parts[2];
+        const quantity = parseInt(parts[3], 10);
         
-        bot.sendMessage(chatId, `⏳ Đang bắt đầu spam server tìm **${targetGift}** cho **${className}**... Vui lòng đợi (có thể mất 1-2 phút) 🚀`, { parse_mode: "Markdown" });
+        bot.sendMessage(chatId, `⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { parse_mode: "Markdown" });
         
-        await huntGiftLoop(chatId, className, targetGift);
+        await huntGiftLoop(chatId, className, targetGift, quantity);
     }
 });
 
 // Hàm Spam API tới khi ra đúng quà yêu cầu
-async function huntGiftLoop(chatId, className, targetGift) {
+async function huntGiftLoop(chatId, className, targetGift, quantity) {
     let attempts = 0;
-    const maxAttempts = 30; // Chạy tối đa 30 lần để tránh bị ban IP/treo máy
+    let foundCount = 0;
+    // Chạy tối đa 30 lần cho 1 mã để tránh bị ban IP (Ví dụ: săn 5 mã sẽ thử tối đa 150 lần)
+    const maxAttempts = quantity * 30; 
 
-    while (attempts < maxAttempts) {
+    while (attempts < maxAttempts && foundCount < quantity) {
         attempts++;
         const playPhone = randomPhone();
         const birthYear = getYearOfBirth(className);
@@ -103,30 +125,38 @@ async function huntGiftLoop(chatId, className, targetGift) {
 
             if (data.gift && data.gift.Gift_Title) {
                 const titleLower = data.gift.Gift_Title.toLowerCase();
+                const nameLower = (data.gift.Gift_Name || "").toLowerCase();
                 let isMatch = false;
+
+                // Chặn triệt để mọi loại voucher
+                const isVoucher = titleLower.includes('voucher') || nameLower.includes('voucher');
 
                 if (targetGift === 'any') {
                     isMatch = true;
                 } else if (targetGift === 'khoahoc') {
-                    // Loại bỏ nếu có chữ 'voucher', sau đó mới dò chữ 'khóa'
-                    if (!titleLower.includes('voucher') && titleLower.includes('khóa')) {
+                    if (!isVoucher && titleLower.includes('khóa')) {
                         isMatch = true;
                     }
                 } else if (targetGift === 'phongluyen') {
-                    if (titleLower.includes('phòng luyện')) {
+                    if (!isVoucher && titleLower.includes('phòng luyện')) {
                         isMatch = true;
                     }
                 }
 
                 if (isMatch) {
-                    const successMsg = `🎉 **THÀNH CÔNG (Sau ${attempts} lần thử)**\n\n` +
+                    foundCount++;
+                    const successMsg = `🎉 **THÀNH CÔNG (${foundCount}/${quantity})**\n\n` +
                                        `📱 SĐT đã dùng: \`${playPhone}\`\n` +
                                        `🎓 Lớp: ${className}\n` +
                                        `🎁 Quà: **${data.gift.Gift_Title}**\n` +
                                        `🔑 Mã: \`${data.gift.Gift_Code || 'Không có mã'}\``;
                     
                     bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
-                    return; // Thoát vòng lặp khi thành công
+                    
+                    if (foundCount >= quantity) {
+                        bot.sendMessage(chatId, `✅ Đã thu thập đủ **${quantity} mã**. Tạm dừng bot!`, { parse_mode: "Markdown" });
+                        return; // Thoát vòng lặp khi đủ số lượng
+                    }
                 }
             }
         } catch (error) {
@@ -137,7 +167,9 @@ async function huntGiftLoop(chatId, className, targetGift) {
         await new Promise(res => setTimeout(res, 1000));
     }
 
-    bot.sendMessage(chatId, `❌ **THẤT BẠI**\nĐã thử ${maxAttempts} lần nhưng không quay ra loại quà bạn muốn cho ${className}. Hãy thử lại!`, { parse_mode: "Markdown" });
+    if (foundCount < quantity) {
+        bot.sendMessage(chatId, `❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng nhấn chọn lại để tiếp tục!`, { parse_mode: "Markdown" });
+    }
 }
 
 console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
