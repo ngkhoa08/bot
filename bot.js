@@ -49,7 +49,7 @@ bot.onText(/\/start/, (msg) => {
         { text: `Lớp 11`, callback_data: `class_Lớp 11` }
     ]);
 
-    bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:\n\n💬 _Cần hỗ trợ/Báo lỗi: Liên hệ @UsernameCuaBan_", {
+    bot.sendMessage(chatId, "👋 Chào mừng! Vui lòng chọn Lớp để bắt đầu:\n\n💬 _Cần hỗ trợ/Báo lỗi: Liên hệ @ngkhoa1916_", {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
     });
@@ -233,4 +233,5 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
 }
 
 console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
+
 
