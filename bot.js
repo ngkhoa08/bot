@@ -222,7 +222,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
     }
 
     if (foundCount < quantity && activeHunts[chatId]) {
-        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!\n\n💬 _Cần hỗ trợ: @UsernameCuaBan_`, { 
+        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!\n\n💬 _Cần hỗ trợ: @ngkhoa1916_`, { 
             chat_id: chatId,
             message_id: originalMessageId,
             parse_mode: "Markdown" 
@@ -233,3 +233,4 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
 }
 
 console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
+
