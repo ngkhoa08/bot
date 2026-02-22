@@ -8,7 +8,7 @@ const bot = new TelegramBot(token, { polling: true });
 
 const apiBaseUrl = "https://script.google.com/macros/s/AKfycbzgfK1VP8ivsAbNRLdne48XD-7QcwsxdHP47JaLpNdKxN7jVaEuDqZMSkCDSYiT6iwc/exec";
 
-// 🔴 THÊM ID ADMIN ĐỂ NHẬN THÔNG BÁO THEO DÕI
+// 🔴 ID ADMIN ĐỂ NHẬN THÔNG BÁO VÀ QUYỀN DỪNG LỆNH
 const ADMIN_ID = '7932302530'; 
 
 // Lưu trạng thái chạy của mỗi user
@@ -33,12 +33,27 @@ function getYearOfBirth(className) {
     return (2020 - classNumber).toString();
 }
 
+// Lệnh dành cho Admin để dừng tiến trình của một User bất kỳ
+bot.onText(/\/stop (.+)/, (msg, match) => {
+    const chatId = msg.chat.id.toString();
+    const targetId = match[1].trim();
+
+    if (chatId !== ADMIN_ID) return; // Chỉ admin mới được dùng
+
+    if (activeHunts[targetId]) {
+        activeHunts[targetId] = false;
+        bot.sendMessage(ADMIN_ID, `✅ Đã phát lệnh dừng tiến trình của ID: \`${targetId}\`.`, { parse_mode: "Markdown" });
+        bot.sendMessage(targetId, `🛑 Quá trình săn quà của bạn đã bị Admin tạm dừng.`, { parse_mode: "Markdown" });
+    } else {
+        bot.sendMessage(ADMIN_ID, `⚠️ ID \`${targetId}\` hiện không có tiến trình nào đang chạy.`, { parse_mode: "Markdown" });
+    }
+});
+
 // Lệnh /start để hiển thị Menu chọn Lớp
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const keyboard = [];
     
-    // Tạo menu lưới 3 cột từ lớp 1 đến lớp 9
     for (let i = 1; i <= 9; i += 3) {
         keyboard.push([
             { text: `Lớp ${i}`, callback_data: `class_Lớp ${i}` },
@@ -46,7 +61,6 @@ bot.onText(/\/start/, (msg) => {
             { text: `Lớp ${i+2}`, callback_data: `class_Lớp ${i+2}` }
         ]);
     }
-    // Thêm hàng cuối cùng cho Lớp 10 và 11
     keyboard.push([
         { text: `Lớp 10`, callback_data: `class_Lớp 10` },
         { text: `Lớp 11`, callback_data: `class_Lớp 11` }
@@ -64,7 +78,6 @@ bot.on('callback_query', async (query) => {
     const messageId = query.message.message_id;
     const data = query.data;
 
-    // Bước 1: Chọn Lớp xong -> Hiển thị Menu chọn Quà
     if (data.startsWith('class_')) {
         const selectedClass = data.split('_')[1];
         const giftKeyboard = [
@@ -81,7 +94,6 @@ bot.on('callback_query', async (query) => {
         });
     }
 
-    // Bước 1.5: Chọn Số lượng
     if (data.startsWith('qty_')) {
         const parts = data.split('_');
         const targetGift = parts[1];
@@ -102,19 +114,16 @@ bot.on('callback_query', async (query) => {
         });
     }
 
-    // Bước 2: Bắt đầu săn quà
     if (data.startsWith('hunt_')) {
         const parts = data.split('_');
-        const targetGift = parts[1]; // khoahoc, phongluyen, any
+        const targetGift = parts[1];
         const className = parts[2];
         const quantity = parseInt(parts[3], 10);
         
-        // 👉 GỬI THÔNG BÁO CHO ADMIN
         const user = query.from;
         const userInfo = user.username ? `@${user.username}` : user.first_name;
-        bot.sendMessage(ADMIN_ID, `👀 **Theo dõi:** ${userInfo} (ID: \`${user.id}\`) vừa bắt đầu lệnh săn **${quantity} mã ${targetGift}** cho **${className}**.`, { parse_mode: "Markdown" });
+        bot.sendMessage(ADMIN_ID, `👀 **Theo dõi:** ${userInfo} (ID: \`${user.id}\`) đang săn **${quantity} mã ${targetGift}** cho **${className}**.`, { parse_mode: "Markdown" });
 
-        // Đánh dấu user đang chạy
         activeHunts[chatId] = true;
 
         bot.editMessageText(`⏳ Đang bắt đầu spam server tìm **${quantity} mã ${targetGift}** cho **${className}**... Vui lòng đợi 🚀`, { 
@@ -129,7 +138,6 @@ bot.on('callback_query', async (query) => {
         await huntGiftLoop(chatId, className, targetGift, quantity, messageId);
     }
 
-    // Bước 3: Xử lý nút Hủy
     if (data === 'cancel_hunt') {
         if (activeHunts[chatId]) {
             activeHunts[chatId] = false;
@@ -137,13 +145,10 @@ bot.on('callback_query', async (query) => {
                 chat_id: chatId,
                 message_id: messageId
             });
-        } else {
-            bot.answerCallbackQuery(query.id, { text: "⚠️ Không có tiến trình nào đang chạy.", show_alert: true });
         }
     }
 });
 
-// Hàm Spam API tới khi ra đúng quà yêu cầu
 async function huntGiftLoop(chatId, className, targetGift, quantity, originalMessageId) {
     let attempts = 0;
     let foundCount = 0;
@@ -183,26 +188,21 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
 
                 const isVoucher = titleLower.includes('voucher') || nameLower.includes('voucher');
 
-                if (targetGift === 'any') {
-                    isMatch = true;
-                } else if (targetGift === 'khoahoc') {
-                    if (!isVoucher && titleLower.includes('khóa')) isMatch = true;
-                } else if (targetGift === 'phongluyen') {
-                    if (!isVoucher && titleLower.includes('phòng luyện')) isMatch = true;
-                }
+                if (targetGift === 'any') isMatch = true;
+                else if (targetGift === 'khoahoc' && !isVoucher && titleLower.includes('khóa')) isMatch = true;
+                else if (targetGift === 'phongluyen' && !isVoucher && titleLower.includes('phòng luyện')) isMatch = true;
 
                 if (isMatch) {
                     foundCount++;
                     const successMsg = `🎉 **THÀNH CÔNG (${foundCount}/${quantity})**\n\n` +
-                                       `📱 SĐT đã dùng: \`${playPhone}\`\n` +
-                                       `🎓 Lớp: ${className}\n` +
+                                       `📱 SĐT: \`${playPhone}\`\n` +
                                        `🎁 Quà: **${data.gift.Gift_Title}**\n` +
                                        `🔑 Mã: \`${data.gift.Gift_Code || 'Không có mã'}\``;
                     
                     bot.sendMessage(chatId, successMsg, { parse_mode: "Markdown" });
                     
                     if (foundCount >= quantity) {
-                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Vô đây để kích hoạt mã** (đăng nhập trước khi nhấn vô link): https://hocmai.vn/course/mycourse2.php?t=activationkey\n\n⚠️ _Nếu điền tiếp mà hệ thống báo là "Bạn đã nhập quá số lần cho phép" thì hãy đợi 15p-1 tiếng._\n\n💬 _Gặp trục trặc? Liên hệ Admin: @ngkhoa1916_`, { 
+                        bot.editMessageText(`✅ Đã thu thập đủ **${quantity} mã**.\n\n👉 **Kích hoạt tại**: https://hocmai.vn/course/mycourse2.php?t=activationkey\n\n⚠️ _Nếu quá số lần cho phép, hãy đợi 15p-1 tiếng._\n\n💬 _Hỗ trợ: @ngkhoa1916_`, { 
                             chat_id: chatId,
                             message_id: originalMessageId,
                             disable_web_page_preview: true,
@@ -221,7 +221,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
     }
 
     if (foundCount < quantity && activeHunts[chatId]) {
-        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã. Vui lòng gõ /start để làm lại!\n\n💬 _Cần hỗ trợ: @ngkhoa1916_`, { 
+        bot.editMessageText(`❌ **DỪNG LẠI**\nĐã thử ${maxAttempts} lần nhưng chỉ lấy được ${foundCount}/${quantity} mã.\n\n💬 _Cần hỗ trợ: @ngkhoa1916_`, { 
             chat_id: chatId,
             message_id: originalMessageId,
             parse_mode: "Markdown" 
@@ -231,4 +231,4 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
     delete activeHunts[chatId];
 }
 
-console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
+console.log("🤖 Bot đang chạy!");
