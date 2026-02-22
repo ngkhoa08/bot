@@ -74,7 +74,7 @@ bot.onText(/\/start/, (msg) => {
     }
     keyboard.push([{ text: `Lớp 10`, callback_data: `class_Lớp 10` }, { text: `Lớp 11`, callback_data: `class_Lớp 11` }]);
 
-    bot.sendMessage(chatId, "👋 Chào mừng!\n\n⚠️ Hiện tại bên Hocmai lớp 1,2,3,4,5,9,10 và 11 đã hết quà.\n\nVui lòng chọn Lớp để bắt đầu:\n\n💬 _Hỗ trợ: @ngkhoa1916_", {
+    bot.sendMessage(chatId, "👋 Chào mừng!\n\n⚠️ Hiện tại bên Hocmai lớp 1,2,3,4,5,6,9,10 và 11 đã hết quà.\n\nVui lòng chọn Lớp để bắt đầu:\n\n💬 _Hỗ trợ: @ngkhoa1916_", {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
     });
@@ -203,6 +203,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
 }
 
 console.log("🤖 Bot khởi động thành công!");
+
 
 
 
