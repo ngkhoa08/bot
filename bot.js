@@ -105,9 +105,18 @@ async function huntGiftLoop(chatId, className, targetGift) {
                 const titleLower = data.gift.Gift_Title.toLowerCase();
                 let isMatch = false;
 
-                if (targetGift === 'any') isMatch = true;
-                else if (targetGift === 'khoahoc' && titleLower.includes('khóa')) isMatch = true;
-                else if (targetGift === 'phongluyen' && titleLower.includes('phòng luyện')) isMatch = true;
+                if (targetGift === 'any') {
+                    isMatch = true;
+                } else if (targetGift === 'khoahoc') {
+                    // Loại bỏ nếu có chữ 'voucher', sau đó mới dò chữ 'khóa'
+                    if (!titleLower.includes('voucher') && titleLower.includes('khóa')) {
+                        isMatch = true;
+                    }
+                } else if (targetGift === 'phongluyen') {
+                    if (titleLower.includes('phòng luyện')) {
+                        isMatch = true;
+                    }
+                }
 
                 if (isMatch) {
                     const successMsg = `🎉 **THÀNH CÔNG (Sau ${attempts} lần thử)**\n\n` +
