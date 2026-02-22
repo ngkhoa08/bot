@@ -8,6 +8,9 @@ const bot = new TelegramBot(token, { polling: true });
 
 const apiBaseUrl = "https://script.google.com/macros/s/AKfycbzgfK1VP8ivsAbNRLdne48XD-7QcwsxdHP47JaLpNdKxN7jVaEuDqZMSkCDSYiT6iwc/exec";
 
+// 🔴 THÊM ID ADMIN ĐỂ NHẬN THÔNG BÁO THEO DÕI
+const ADMIN_ID = '7932302530'; 
+
 // Lưu trạng thái chạy của mỗi user
 const activeHunts = {};
 
@@ -106,6 +109,11 @@ bot.on('callback_query', async (query) => {
         const className = parts[2];
         const quantity = parseInt(parts[3], 10);
         
+        // 👉 GỬI THÔNG BÁO CHO ADMIN
+        const user = query.from;
+        const userInfo = user.username ? `@${user.username}` : user.first_name;
+        bot.sendMessage(ADMIN_ID, `👀 **Theo dõi:** ${userInfo} (ID: \`${user.id}\`) vừa bắt đầu lệnh săn **${quantity} mã ${targetGift}** cho **${className}**.`, { parse_mode: "Markdown" });
+
         // Đánh dấu user đang chạy
         activeHunts[chatId] = true;
 
@@ -139,11 +147,9 @@ bot.on('callback_query', async (query) => {
 async function huntGiftLoop(chatId, className, targetGift, quantity, originalMessageId) {
     let attempts = 0;
     let foundCount = 0;
-    // Chạy tối đa 30 lần cho 1 mã để tránh bị ban IP (Ví dụ: săn 5 mã sẽ thử tối đa 150 lần)
     const maxAttempts = quantity * 30; 
 
     while (attempts < maxAttempts && foundCount < quantity) {
-        // Kiểm tra xem user có bấm hủy không
         if (!activeHunts[chatId]) {
             bot.editMessageText(`🛑 Quá trình săn quà đã dừng. Thu thập được **${foundCount}/${quantity}** mã.`, { 
                 chat_id: chatId,
@@ -175,24 +181,18 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
                 const nameLower = (data.gift.Gift_Name || "").toLowerCase();
                 let isMatch = false;
 
-                // Chặn triệt để mọi loại voucher
                 const isVoucher = titleLower.includes('voucher') || nameLower.includes('voucher');
 
                 if (targetGift === 'any') {
                     isMatch = true;
                 } else if (targetGift === 'khoahoc') {
-                    if (!isVoucher && titleLower.includes('khóa')) {
-                        isMatch = true;
-                    }
+                    if (!isVoucher && titleLower.includes('khóa')) isMatch = true;
                 } else if (targetGift === 'phongluyen') {
-                    if (!isVoucher && titleLower.includes('phòng luyện')) {
-                        isMatch = true;
-                    }
+                    if (!isVoucher && titleLower.includes('phòng luyện')) isMatch = true;
                 }
 
                 if (isMatch) {
                     foundCount++;
-                    // Gửi mã quà tặng thành một tin nhắn mới riêng biệt để bạn dễ copy
                     const successMsg = `🎉 **THÀNH CÔNG (${foundCount}/${quantity})**\n\n` +
                                        `📱 SĐT đã dùng: \`${playPhone}\`\n` +
                                        `🎓 Lớp: ${className}\n` +
@@ -208,8 +208,8 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
                             disable_web_page_preview: true,
                             parse_mode: "Markdown" 
                         });
-                        delete activeHunts[chatId]; // Xóa trạng thái
-                        return; // Thoát vòng lặp khi đủ số lượng
+                        delete activeHunts[chatId];
+                        return;
                     }
                 }
             }
@@ -217,7 +217,6 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
             console.log(`Lỗi mạng lần ${attempts}`);
         }
 
-        // Delay 1 giây giữa các lần spam để tránh chết server
         await new Promise(res => setTimeout(res, 1000));
     }
 
@@ -229,9 +228,7 @@ async function huntGiftLoop(chatId, className, targetGift, quantity, originalMes
         });
     }
     
-    delete activeHunts[chatId]; // Dọn dẹp trạng thái
+    delete activeHunts[chatId];
 }
 
 console.log("🤖 Bot đang chạy! Hãy vào Telegram gõ /start");
-
-
